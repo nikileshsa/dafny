@@ -2987,6 +2987,7 @@ namespace Microsoft.Dafny {
         case DafnyOptions.CompilationTarget.Go:
           return GoCompiler.PublicIdProtect(name);
         case DafnyOptions.CompilationTarget.Java:
+        case DafnyOptions.CompilationTarget.JavaAST:
           return GoCompiler.PublicIdProtect(name);
         default:
           Contract.Assert(false);  // unexpected compile target

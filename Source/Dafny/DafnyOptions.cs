@@ -64,7 +64,7 @@ namespace Microsoft.Dafny
     public List<string> DafnyPrintExportedViews = new List<string>();
     public bool Compile = true;
     [Flags]
-    public enum CompilationTarget { Csharp = 1, JavaScript = 2, Go = 4, Java = 8, Php = 16 }
+    public enum CompilationTarget { Csharp = 1, JavaScript = 2, Go = 4, Java = 8, Php = 16, JavaAST = 32 }
     public CompilationTarget CompileTarget = CompilationTarget.Csharp;
     public bool CompileVerbose = true;
     public string DafnyPrintCompiledFile = null;
@@ -180,6 +180,8 @@ namespace Microsoft.Dafny
               CompileTarget = CompilationTarget.Go;
             } else if (args[ps.i].Equals("java")) {
               CompileTarget = CompilationTarget.Java;
+            } else if (args[ps.i].Equals("javaast")) {
+              CompileTarget = CompilationTarget.JavaAST;
             } else if (args[ps.i].Equals("php")) {
               CompileTarget = CompilationTarget.Php;
             } else {

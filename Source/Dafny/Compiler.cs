@@ -596,7 +596,7 @@ namespace Microsoft.Dafny {
     protected abstract TargetWriter CreateIIFE_ExprBody(string source, Type sourceType, Bpl.IToken sourceTok, Type resultType, Bpl.IToken resultTok, string bvName, TargetWriter wr);  // Immediately Invoked Function Expression
     protected abstract BlockTargetWriter CreateIIFE0(Type resultType, Bpl.IToken resultTok, TargetWriter wr);  // Immediately Invoked Function Expression
     protected abstract BlockTargetWriter CreateIIFE1(int source, Type resultType, Bpl.IToken resultTok, string bvName, TargetWriter wr);  // Immediately Invoked Function Expression
-    public enum ResolvedUnaryOp { BoolNot, BitwiseNot, Cardinality }
+    public enum ResolvedUnaryOp { BoolNot, BitwiseNot, Cardinality, Fresh }
     protected abstract void EmitUnaryExpr(ResolvedUnaryOp op, Expression expr, bool inLetExprBody, TargetWriter wr);
     protected abstract void CompileBinOp(BinaryExpr.ResolvedOpcode op,
       Expression e0, Expression e1, Bpl.IToken tok, Type resultType,
@@ -635,7 +635,7 @@ namespace Microsoft.Dafny {
       modules = program.CompileModules;
     }
 
-    public void Compile(Program program, TargetWriter wrx) {
+    public virtual void Compile(Program program, TargetWriter wrx) {
       Contract.Requires(program != null);
 
       EmitHeader(program, wrx);
@@ -912,7 +912,7 @@ namespace Microsoft.Dafny {
       return false;
     }
 
-    void OrderedBySCC(List<MemberDecl> decls, TopLevelDeclWithMembers c) {
+    protected void OrderedBySCC(List<MemberDecl> decls, TopLevelDeclWithMembers c) {
       List<ConstantField> consts = new List<ConstantField>();
       foreach (var decl in decls) {
         if (decl is ConstantField) {
@@ -1165,7 +1165,7 @@ namespace Microsoft.Dafny {
       thisContext = null;
     }
 
-    void CheckHandleWellformed(ClassDecl cl, TextWriter/*?*/ errorWr) {
+    protected void CheckHandleWellformed(ClassDecl cl, TextWriter/*?*/ errorWr) {
       Contract.Requires(cl != null);
       var isHandle = true;
       if (Attributes.ContainsBool(cl.Attributes, "handle", ref isHandle) && isHandle) {
@@ -1200,7 +1200,7 @@ namespace Microsoft.Dafny {
     /// or not.
     /// </remarks>
     /// <seealso cref="HasCapitalizationConflict"/>
-    private void CheckForCapitalizationConflicts<T>(IEnumerable<T> canChange, IEnumerable<T> cantChange = null) where T : Declaration {
+    protected void CheckForCapitalizationConflicts<T>(IEnumerable<T> canChange, IEnumerable<T> cantChange = null) where T : Declaration {
       if (cantChange == null) {
         cantChange = Enumerable.Empty<T>();
       }
@@ -3501,6 +3501,9 @@ namespace Microsoft.Dafny {
             break;
           case UnaryOpExpr.Opcode.Cardinality:
             EmitUnaryExpr(ResolvedUnaryOp.Cardinality, e.E, inLetExprBody, wr);
+            break;
+          case UnaryOpExpr.Opcode.Fresh:
+            EmitUnaryExpr(ResolvedUnaryOp.Fresh, e.E, inLetExprBody, wr);
             break;
           default:
             Contract.Assert(false); throw new cce.UnreachableException();  // unexpected unary expression
