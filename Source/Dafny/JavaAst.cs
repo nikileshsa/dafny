@@ -45,6 +45,9 @@ namespace Microsoft.Dafny.Java {
       public abstract R visit(ExpressionStatement ast, T arg);
       public abstract R visit(AssignStatement ast, T arg);
       public abstract R visit(ReturnStatement ast, T arg);
+      public abstract R visit(JumpStatement ast, T arg);
+      public abstract R visit(IfStatement ast, T arg);
+      public abstract R visit(WhileStatement ast, T arg);
       public abstract R visit(Identifier ast, T arg);
       public abstract R visit(Select ast, T arg);
       public abstract R visit(Index ast, T arg);
@@ -122,6 +125,11 @@ namespace Microsoft.Dafny.Java {
 
 
     public abstract class Statement : AST {
+      public Statement noindent() {
+        if (this is BlockStatement) ((BlockStatement)this).noindent();
+        return this;
+      }
+
     }
 
     public abstract class Type : AST {
@@ -224,6 +232,11 @@ namespace Microsoft.Dafny.Java {
 
       public BlockStatement() {
         this.statements = new List<Statement>();
+      }
+
+      public BlockStatement noindent() {
+        this.initialIndent = false;
+        return this;
       }
 
       public BlockStatement(BlockStatement ast) : this(ast.statements) {
@@ -329,6 +342,59 @@ namespace Microsoft.Dafny.Java {
       }
 
       public AssignStatement(AssignStatement ast) : this(ast.lhs, ast.rhs) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
+
+    public class WhileStatement : Statement {
+      public Expression condition;
+      public Statement body;
+
+      public WhileStatement(Expression condition, Statement body) {
+        this.condition = condition;
+        this.body = body;
+      }
+
+      public WhileStatement(WhileStatement ast) : this(ast.condition, ast.body) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
+
+    public class IfStatement : Statement {
+      public Expression condition;
+      public Statement thenStatement;
+      public Statement elseStatement; // possibly null
+
+      public IfStatement(Expression condition, Statement thenStatement, Statement elseStatement) {
+        this.condition = condition;
+        this.thenStatement = thenStatement;
+        this.elseStatement = elseStatement;
+      }
+
+      public IfStatement(IfStatement ast) : this(ast.condition, ast.thenStatement, ast.elseStatement) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
+
+    public class JumpStatement : Statement {
+      public string kind;
+      public string target; // possibly null
+
+      public JumpStatement(string kind, string target) {
+        this.kind = kind;
+        this.target = target;
+      }
+
+      public JumpStatement(JumpStatement ast) : this(ast.kind, ast.target) {
       }
 
       public override R accept<R, T>(IVisitor<R, T> v, T arg) {
@@ -679,7 +745,7 @@ namespace Microsoft.Dafny.Java {
           return ret;
         } else {
           string ret = (ast.initialIndent?indent:"") + "{" + eol;
-          foreach (Statement s in ast.statements) ret = ret + print(s, indent + indentamt);
+          foreach (Statement s in ast.statements) ret += print(s, indent + indentamt);
           return ret + indent + "}" + eol;
         }
       }
@@ -702,6 +768,24 @@ namespace Microsoft.Dafny.Java {
 
       public override string visit(ReturnStatement ast, string indent) {
         return indent + "return " + (ast.result != null ? print(ast.result, indent) : "") + ";" + eol;
+      }
+
+      public override string visit(JumpStatement ast, string indent) {
+        return indent + ast.kind + (ast.target != null ? (" " + ast.target) : "") + ";" + eol;
+      }
+
+      public override string visit(WhileStatement ast, string indent) {
+        return indent + "while (" + inline(ast.condition) + ") " + print(ast.body, indent) + eol;
+      }
+
+      public override string visit(IfStatement ast, string indent) {
+        string ret = indent + "if (" + inline(ast.condition) + ") " + print(ast.thenStatement, indent);
+        if (ast.elseStatement != null) {
+          string z = "}" + eol;
+          if (ret.EndsWith(z)) ret = ret.Substring(0, ret.Length - eol.Length);
+          ret += " else " + print(ast.elseStatement, indent);
+        }
+        return ret + eol;
       }
 
       public override string visit(ClassDeclaration ast, string indent) {

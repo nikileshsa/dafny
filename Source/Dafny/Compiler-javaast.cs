@@ -4825,6 +4825,7 @@ namespace Microsoft.Dafny {
       Contract.Requires(errorWr != null);
 
       AST.Statement ast = null;
+      if (stmt == null) return ast;
       if (stmt.IsGhost) {
         if (stmt is AssumeStmt) {
           ast = new AST.ExpressionStatement("assume", TrExpr(((AssumeStmt) stmt).Expr));
@@ -4849,9 +4850,9 @@ namespace Microsoft.Dafny {
         //   EmitPrintStmt(wr, arg);
         // }
       } else if (stmt is BreakStmt) {
-        return new AST.CommentStatement("Not implemented: break statement");
-        // var s = (BreakStmt) stmt;
-        // EmitBreak(s.TargetStmt.Labels.Data.AssignUniqueId(idGenerator), wr);
+        var s = (BreakStmt) stmt;
+        ast =  new AST.JumpStatement("break", s.TargetLabel);
+        
       } else if (stmt is ReturnStmt) {
         ReturnStmt p = (ReturnStmt) stmt;
         AssignmentRhs r = p.rhss.First();
@@ -5034,8 +5035,10 @@ namespace Microsoft.Dafny {
         
       } else if (stmt is IfStmt) {
         IfStmt s = (IfStmt) stmt;
-        Console.WriteLine("Not implemented: if statement");
-        return null;  // TODO
+        AST.Expression guard = TrExpr(s.Guard);
+        AST.Statement thenSt = TrStmt(s.Thn).noindent();
+        AST.Statement elseSt = s.Els == null ? null : TrStmt(s.Els).noindent();
+        ast = new AST.IfStatement(guard, thenSt, elseSt);
 
         // if (s.Guard == null) {
         //   if (DafnyOptions.O.ForbidNondeterminism) {
@@ -5126,7 +5129,8 @@ namespace Microsoft.Dafny {
           return null;
         }
 
-        return new AST.CommentStatement("Not implemented: while statement");  // TODO
+        // TODO - needs specs, * version of condition, case statement alternatives
+        ast = new AST.WhileStatement(TrExpr(s.Guard), TrStmt(s.Body).noindent());  // TODO
         // if (s.Guard == null) {
         //   if (DafnyOptions.O.ForbidNondeterminism) {
         //     Error(s.Tok, "nondeterministic loop forbidden by /definiteAssignment:3 option", wr);
@@ -6022,7 +6026,7 @@ namespace Microsoft.Dafny {
 
     AST.Statement addLabels(LList<Label> labels, AST.Statement statement) {
       AST.Statement s = statement;
-      if (labels != null) {
+      if (labels != null && labels.Data.Name != null) {
         s = addLabels(labels.Next, s);
         s = new AST.LabelledStatement(labels.Data.Name, s);
       }
