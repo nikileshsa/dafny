@@ -223,7 +223,7 @@ namespace Microsoft.Dafny {
 
             errorWr = wr;
 
-            AST.ClassDeclaration ast = CreateClass(cl, root);
+            AST.ClassDeclaration ast = TrClass(cl, root);
             cu.declarations.Add(ast);
             // if (include) {
             //   var cw = CreateClass(IdName(cl), classIsExtern, cl.FullName, cl.TypeArgs, cl.TraitsTyp, cl.tok, wr);
@@ -566,7 +566,7 @@ namespace Microsoft.Dafny {
       // }
     }
 
-    protected AST.ClassDeclaration CreateClass(ClassDecl cl, string root) {
+    protected AST.ClassDeclaration TrClass(ClassDecl cl, string root) {
       string name = IdName(cl);
       if (cl.IsDefaultClass) {
         name = root;
@@ -872,7 +872,7 @@ namespace Microsoft.Dafny {
             // Contract.Assert(w == null);  // since we requested no body
           }
           else {
-            cd.members.Add(CompileMethod(m));
+            cd.members.Add(TrMethod(m));
           }
         }
         else {
@@ -885,7 +885,7 @@ namespace Microsoft.Dafny {
     }
 
 
-    private AST.MethodDeclaration CompileMethod(Method m) {
+    private AST.MethodDeclaration TrMethod(Method m) {
       Contract.Requires(errorWr != null);
       Contract.Requires(m != null);
       Contract.Requires(m.Body != null);
@@ -2038,18 +2038,19 @@ namespace Microsoft.Dafny {
       return w;
     }
 
-    protected override TargetWriter EmitArraySelect(List<Expression> indices, Type elmtType, bool inLetExprBody,
-      TargetWriter wr) {
-      Contract.Assert(indices != null && 1 <= indices.Count); // follows from precondition
-      List<TargetWriter> wIndices;
-      var w = EmitArraySelect(indices.Count, out wIndices, elmtType, wr);
-
-      for (int i = 0; i < indices.Count; i++) {
-        TrParenExprAsInt(indices[i], wIndices[i], inLetExprBody);
-      }
-
-      return w;
-    }
+     protected override TargetWriter EmitArraySelect(List<Expression> indices, Type elmtType, bool inLetExprBody,
+       TargetWriter wr) {
+    //   Contract.Assert(indices != null && 1 <= indices.Count); // follows from precondition
+    //   List<TargetWriter> wIndices;
+    //   var w = EmitArraySelect(indices.Count, out wIndices, elmtType, wr);
+    //
+    //   for (int i = 0; i < indices.Count; i++) {
+    //     TrParenExprAsInt(indices[i], wIndices[i], inLetExprBody);
+    //   }
+    //
+    //   return w;
+        return null;
+     }
 
     private TargetWriter EmitArraySelect(int dimCount, out List<TargetWriter> wIndices, Type elmtType,
       TargetWriter wr) {
@@ -2176,51 +2177,51 @@ namespace Microsoft.Dafny {
       }
     }
 
-    protected override void EmitSeqSelectRange(Expression source, Expression lo, Expression hi, bool fromArray,
-      bool inLetExprBody, TargetWriter wr) {
-      if (fromArray) {
-        wr.Write($"{DafnySeqClass}.fromRawArrayRange({TypeDescriptor(source.Type.TypeArgs[0], wr, source.tok)}, ");
-      }
-
-      TrParenExpr(source, wr, inLetExprBody);
-      if (fromArray) {
-        wr.Write(", ");
-        if (lo != null) {
-          TrExprAsInt(lo, wr, inLetExprBody);
-        }
-        else {
-          wr.Write("0");
-        }
-
-        wr.Write(", ");
-        if (hi != null) {
-          TrExprAsInt(hi, wr, inLetExprBody);
-        }
-        else {
-          wr.Write("java.lang.reflect.Array.getLength");
-          TrParenExpr(source, wr, inLetExprBody);
-        }
-
-        wr.Write(")");
-      }
-      else {
-        if (lo != null && hi != null) {
-          wr.Write(".subsequence(");
-          TrExprAsInt(lo, wr, inLetExprBody);
-          wr.Write(", ");
-          TrExprAsInt(hi, wr, inLetExprBody);
-          wr.Write(")");
-        }
-        else if (lo != null) {
-          wr.Write(".drop");
-          TrParenExpr(lo, wr, inLetExprBody);
-        }
-        else if (hi != null) {
-          wr.Write(".take");
-          TrParenExpr(hi, wr, inLetExprBody);
-        }
-      }
-    }
+     protected override void EmitSeqSelectRange(Expression source, Expression lo, Expression hi, bool fromArray,
+       bool inLetExprBody, TargetWriter wr) {
+    //   if (fromArray) {
+    //     wr.Write($"{DafnySeqClass}.fromRawArrayRange({TypeDescriptor(source.Type.TypeArgs[0], wr, source.tok)}, ");
+    //   }
+    //
+    //   TrParenExpr(source, wr, inLetExprBody);
+    //   if (fromArray) {
+    //     wr.Write(", ");
+    //     if (lo != null) {
+    //       TrExprAsInt(lo, wr, inLetExprBody);
+    //     }
+    //     else {
+    //       wr.Write("0");
+    //     }
+    //
+    //     wr.Write(", ");
+    //     if (hi != null) {
+    //       TrExprAsInt(hi, wr, inLetExprBody);
+    //     }
+    //     else {
+    //       wr.Write("java.lang.reflect.Array.getLength");
+    //       TrParenExpr(source, wr, inLetExprBody);
+    //     }
+    //
+    //     wr.Write(")");
+    //   }
+    //   else {
+    //     if (lo != null && hi != null) {
+    //       wr.Write(".subsequence(");
+    //       TrExprAsInt(lo, wr, inLetExprBody);
+    //       wr.Write(", ");
+    //       TrExprAsInt(hi, wr, inLetExprBody);
+    //       wr.Write(")");
+    //     }
+    //     else if (lo != null) {
+    //       wr.Write(".drop");
+    //       TrParenExpr(lo, wr, inLetExprBody);
+    //     }
+    //     else if (hi != null) {
+    //       wr.Write(".take");
+    //       TrParenExpr(hi, wr, inLetExprBody);
+    //     }
+    //   }
+     }
 
     protected override void EmitIndexCollectionSelect(Expression source, Expression index, bool inLetExprBody,
       TargetWriter wr) {
@@ -4394,85 +4395,85 @@ namespace Microsoft.Dafny {
       return null;
     }
 
-    private void TrExprAsInt(Expression expr, TargetWriter wr, bool inLetExprBody) {
-      // TODO: Optimize
-      if (AsNativeType(expr.Type) == null) {
-        TrParenExpr(expr, wr, inLetExprBody);
-        wr.Write(".intValue()");
-      }
-      else {
-        TrExpr(expr, wr, inLetExprBody);
-      }
-    }
+    // private void TrExprAsInt(Expression expr, TargetWriter wr, bool inLetExprBody) {
+    //   // TODO: Optimize
+    //   if (AsNativeType(expr.Type) == null) {
+    //     TrParenExpr(expr, wr, inLetExprBody);
+    //     wr.Write(".intValue()");
+    //   }
+    //   else {
+    //     TrExpr(expr, wr, inLetExprBody);
+    //   }
+    // }
+    //
+    // private void TrParenExprAsInt(Expression expr, TargetWriter wr, bool inLetExprBody) {
+    //   wr.Write('(');
+    //   TrExprAsInt(expr, wr, inLetExprBody);
+    //   wr.Write(')');
+    // }
+    //
+    // private void TrParenExprAsInt(string prefix, Expression expr, TargetWriter wr, bool inLetExprBody) {
+    //   wr.Write(prefix);
+    //   TrParenExprAsInt(expr, wr, inLetExprBody);
+    // }
 
-    private void TrParenExprAsInt(Expression expr, TargetWriter wr, bool inLetExprBody) {
-      wr.Write('(');
-      TrExprAsInt(expr, wr, inLetExprBody);
-      wr.Write(')');
-    }
-
-    private void TrParenExprAsInt(string prefix, Expression expr, TargetWriter wr, bool inLetExprBody) {
-      wr.Write(prefix);
-      TrParenExprAsInt(expr, wr, inLetExprBody);
-    }
-
-    protected override void EmitNewArray(Type elmtType, Bpl.IToken tok, List<Expression> dimensions,
-      bool mustInitialize, TargetWriter wr) {
-      // Where to put the array to be wrapped
-      TargetWriter wBareArray;
-      if (dimensions.Count > 1) {
-        arrays.Add(dimensions.Count);
-        wr.Write($"new {DafnyMultiArrayClass(dimensions.Count)}<>({TypeDescriptor(elmtType, wr, tok)}, ");
-        foreach (var dim in dimensions) {
-          TrExprAsInt(dim, wr, inLetExprBody: false);
-          wr.Write(", ");
-        }
-
-        wBareArray = wr.Fork();
-        wr.Write(")");
-        if (mustInitialize) {
-          wr.Write($".fillThenReturn({DefaultValue(elmtType, wr, tok)})");
-        }
-      }
-      else {
-        if (!elmtType.IsTypeParameter) {
-          wr.Write($"({ArrayTypeName(elmtType, dimensions.Count, wr, tok)}) ");
-        }
-
-        if (mustInitialize) {
-          wr.Write($"{TypeDescriptor(elmtType, wr, tok)}.fillThenReturnArray(");
-        }
-
-        wBareArray = wr.Fork();
-        if (mustInitialize) {
-          wr.Write($", {DefaultValue(elmtType, wr, tok)})");
-        }
-      }
-
-      if (elmtType.IsTypeParameter) {
-        if (dimensions.Count > 1) {
-          wBareArray.Write($"(Object{Util.Repeat("[]", dimensions.Count - 1)}) ");
-        }
-
-        wBareArray.Write($"{TypeDescriptor(elmtType, wr, tok)}.newArray(");
-        var sep = "";
-        foreach (var dim in dimensions) {
-          wBareArray.Write(sep);
-          TrExprAsInt(dim, wBareArray, inLetExprBody: false);
-          sep = ", ";
-        }
-
-        wBareArray.Write(")");
-      }
-      else {
-        wBareArray.Write($"new {TypeName(elmtType, wr, tok)}");
-        foreach (var dim in dimensions) {
-          wBareArray.Write("[");
-          TrExprAsInt(dim, wBareArray, inLetExprBody: false);
-          wBareArray.Write("]");
-        }
-      }
-    }
+     protected override void EmitNewArray(Type elmtType, Bpl.IToken tok, List<Expression> dimensions,
+       bool mustInitialize, TargetWriter wr) {
+    //   // Where to put the array to be wrapped
+    //   TargetWriter wBareArray;
+    //   if (dimensions.Count > 1) {
+    //     arrays.Add(dimensions.Count);
+    //     wr.Write($"new {DafnyMultiArrayClass(dimensions.Count)}<>({TypeDescriptor(elmtType, wr, tok)}, ");
+    //     foreach (var dim in dimensions) {
+    //       TrExprAsInt(dim, wr, inLetExprBody: false);
+    //       wr.Write(", ");
+    //     }
+    //
+    //     wBareArray = wr.Fork();
+    //     wr.Write(")");
+    //     if (mustInitialize) {
+    //       wr.Write($".fillThenReturn({DefaultValue(elmtType, wr, tok)})");
+    //     }
+    //   }
+    //   else {
+    //     if (!elmtType.IsTypeParameter) {
+    //       wr.Write($"({ArrayTypeName(elmtType, dimensions.Count, wr, tok)}) ");
+    //     }
+    //
+    //     if (mustInitialize) {
+    //       wr.Write($"{TypeDescriptor(elmtType, wr, tok)}.fillThenReturnArray(");
+    //     }
+    //
+    //     wBareArray = wr.Fork();
+    //     if (mustInitialize) {
+    //       wr.Write($", {DefaultValue(elmtType, wr, tok)})");
+    //     }
+    //   }
+    //
+    //   if (elmtType.IsTypeParameter) {
+    //     if (dimensions.Count > 1) {
+    //       wBareArray.Write($"(Object{Util.Repeat("[]", dimensions.Count - 1)}) ");
+    //     }
+    //
+    //     wBareArray.Write($"{TypeDescriptor(elmtType, wr, tok)}.newArray(");
+    //     var sep = "";
+    //     foreach (var dim in dimensions) {
+    //       wBareArray.Write(sep);
+    //       TrExprAsInt(dim, wBareArray, inLetExprBody: false);
+    //       sep = ", ";
+    //     }
+    //
+    //     wBareArray.Write(")");
+    //   }
+    //   else {
+    //     wBareArray.Write($"new {TypeName(elmtType, wr, tok)}");
+    //     foreach (var dim in dimensions) {
+    //       wBareArray.Write("[");
+    //       TrExprAsInt(dim, wBareArray, inLetExprBody: false);
+    //       wBareArray.Write("]");
+    //     }
+    //   }
+     }
 
     protected override int EmitRuntimeTypeDescriptorsActuals(List<Type> typeArgs, List<TypeParameter> formals,
       Bpl.IToken tok, bool useAllTypeArgs, TargetWriter wr) {
@@ -4617,164 +4618,164 @@ namespace Microsoft.Dafny {
     }
 
     protected override void EmitConversionExpr(ConversionExpr e, bool inLetExprBody, TargetWriter wr) {
-      if (e.E.Type.IsNumericBased(Type.NumericPersuation.Int) || e.E.Type.IsBitVectorType || e.E.Type.IsCharType) {
-        if (e.ToType.IsNumericBased(Type.NumericPersuation.Real)) {
-          // (int or bv) -> real
-          Contract.Assert(AsNativeType(e.ToType) == null);
-          wr.Write($"new {DafnyBigRationalClass}(");
-          if (AsNativeType(e.E.Type) != null) {
-            wr.Write("java.math.BigInteger.valueOf");
-          }
-
-          TrParenExpr(e.E, wr, inLetExprBody);
-          wr.Write(", java.math.BigInteger.ONE)");
-        }
-        else if (e.ToType.IsCharType) {
-          // Painfully, Java sign-extends bytes when casting to chars ...
-          var fromNative = AsNativeType(e.E.Type);
-          wr.Write("(char)");
-          if (fromNative != null && fromNative.Sel == NativeType.Selection.Byte) {
-            wr.Write("java.lang.Byte.toUnsignedInt");
-            TrParenExpr(e.E, wr, inLetExprBody);
-          }
-          else {
-            TrExprAsInt(e.E, wr, inLetExprBody);
-          }
-        }
-        else {
-          // (int or bv or char) -> (int or bv or ORDINAL)
-          var fromNative = AsNativeType(e.E.Type);
-          var toNative = AsNativeType(e.ToType);
-          if (fromNative == null && toNative == null) {
-            if (e.E.Type.IsCharType) {
-              // char -> big-integer (int or bv or ORDINAL)
-              wr.Write("java.math.BigInteger.valueOf");
-              TrParenExpr(e.E, wr, inLetExprBody);
-            }
-            else {
-              // big-integer (int or bv) -> big-integer (int or bv or ORDINAL), so identity will do
-              TrExpr(e.E, wr, inLetExprBody);
-            }
-          }
-          else if (fromNative != null && toNative == null) {
-            // native (int or bv) -> big-integer (int or bv)
-            if (fromNative.Sel == NativeType.Selection.ULong) {
-              // Can't just use .longValue() because that may return a negative
-              wr.Write($"{DafnyHelpersClass}.unsignedLongToBigInteger");
-              TrParenExpr(e.E, wr, inLetExprBody);
-            }
-            else {
-              wr.Write("java.math.BigInteger.valueOf(");
-              if (fromNative.LowerBound >= 0) {
-                TrParenExpr($"{GetBoxedNativeTypeName(fromNative)}.toUnsignedLong", e.E, wr, inLetExprBody);
-              }
-              else {
-                TrParenExpr(e.E, wr, inLetExprBody);
-              }
-
-              wr.Write(")");
-            }
-          }
-          else if (fromNative != null && NativeTypeSize(toNative) == NativeTypeSize(fromNative)) {
-            // native (int or bv) -> native (int or bv)
-            // Cast between signed and unsigned, which have the same Java type
-            TrParenExpr(e.E, wr, inLetExprBody);
-          }
-          else {
-            GetNativeInfo(toNative.Sel, out var toNativeName, out var toNativeSuffix, out var toNativeNeedsCast);
-            // any (int or bv) -> native (int or bv)
-            // A cast would do, but we also consider some optimizations
-            var literal = PartiallyEvaluate(e.E);
-            UnaryOpExpr u = e.E.Resolved as UnaryOpExpr;
-            MemberSelectExpr m = e.E.Resolved as MemberSelectExpr;
-            if (literal != null) {
-              // Optimize constant to avoid intermediate BigInteger
-              EmitNativeIntegerLiteral((BigInteger) literal, toNative, wr);
-            }
-            else if (u != null && u.Op == UnaryOpExpr.Opcode.Cardinality) {
-              // Optimize || to avoid intermediate BigInteger
-              wr.Write(CastIfSmallNativeType(e.ToType));
-              TrParenExpr("", u.E, wr, inLetExprBody);
-              wr.Write(".cardinalityInt()");
-            }
-            else if (m != null && m.MemberName == "Length" && m.Obj.Type.IsArrayType) {
-              // Optimize .length to avoid intermediate BigInteger
-              wr.Write(CastIfSmallNativeType(e.ToType));
-              var elmtType = UserDefinedType.ArrayElementType(m.Obj.Type);
-              TargetWriter w;
-              if (elmtType.IsTypeParameter) {
-                wr.Write($"{FormatTypeDescriptorVariable(elmtType.AsTypeParameter)}.getArrayLength(");
-                w = wr.Fork();
-                wr.Write(")");
-              }
-              else {
-                w = wr.Fork();
-                wr.Write(".length");
-              }
-
-              TrParenExpr(m.Obj, w, inLetExprBody);
-            }
-            else {
-              // no optimization applies; use the standard translation
-              if (fromNative != null && fromNative.LowerBound >= 0 &&
-                  NativeTypeSize(fromNative) < NativeTypeSize(toNative)) {
-                // Widening an unsigned value; careful!!
-                wr.Write($"{CastIfSmallNativeType(e.ToType)}{GetBoxedNativeTypeName(fromNative)}");
-                if (NativeTypeSize(toNative) == 64) {
-                  wr.Write(".toUnsignedLong");
-                }
-                else {
-                  wr.Write(".toUnsignedInt");
-                }
-
-                TrParenExpr(e.E, wr, inLetExprBody);
-              }
-              else {
-                if (fromNative == null && !e.E.Type.IsCharType) {
-                  TrParenExpr(e.E, wr, inLetExprBody);
-                  wr.Write($".{toNativeName}Value()");
-                }
-                else {
-                  wr.Write($"(({toNativeName}) ");
-                  TrParenExpr(e.E, wr, inLetExprBody);
-                  wr.Write(")");
-                }
-              }
-            }
-          }
-        }
-      }
-      else if (e.E.Type.IsNumericBased(Type.NumericPersuation.Real)) {
-        Contract.Assert(AsNativeType(e.E.Type) == null);
-        if (e.ToType.IsNumericBased(Type.NumericPersuation.Real)) {
-          // real -> real
-          Contract.Assert(AsNativeType(e.ToType) == null);
-          TrExpr(e.E, wr, inLetExprBody);
-        }
-        else if (e.ToType.IsCharType) {
-          // real -> char
-          // Painfully, Java sign-extends bytes when casting to chars ...
-          wr.Write("(char)");
-          TrParenExpr(e.E, wr, inLetExprBody);
-          wr.Write(".ToBigInteger().intValue()");
-        }
-        else {
-          // real -> (int or bv)
-          TrParenExpr(e.E, wr, inLetExprBody);
-          wr.Write(".ToBigInteger()");
-          if (AsNativeType(e.ToType) != null) {
-            wr.Write($".{GetNativeTypeName(AsNativeType(e.ToType))}Value()");
-          }
-        }
-      }
-      else {
-        Contract.Assert(e.E.Type.IsBigOrdinalType);
-        Contract.Assert(e.ToType.IsNumericBased(Type.NumericPersuation.Int));
-        TrParenExpr(e.E, wr, inLetExprBody);
-        if (AsNativeType(e.ToType) != null) {
-          wr.Write($".{GetNativeTypeName(AsNativeType(e.ToType))}Value()");
-        }
-      }
+      // if (e.E.Type.IsNumericBased(Type.NumericPersuation.Int) || e.E.Type.IsBitVectorType || e.E.Type.IsCharType) {
+      //   if (e.ToType.IsNumericBased(Type.NumericPersuation.Real)) {
+      //     // (int or bv) -> real
+      //     Contract.Assert(AsNativeType(e.ToType) == null);
+      //     wr.Write($"new {DafnyBigRationalClass}(");
+      //     if (AsNativeType(e.E.Type) != null) {
+      //       wr.Write("java.math.BigInteger.valueOf");
+      //     }
+      //
+      //     TrParenExpr(e.E, wr, inLetExprBody);
+      //     wr.Write(", java.math.BigInteger.ONE)");
+      //   }
+      //   else if (e.ToType.IsCharType) {
+      //     // Painfully, Java sign-extends bytes when casting to chars ...
+      //     var fromNative = AsNativeType(e.E.Type);
+      //     wr.Write("(char)");
+      //     if (fromNative != null && fromNative.Sel == NativeType.Selection.Byte) {
+      //       wr.Write("java.lang.Byte.toUnsignedInt");
+      //       TrParenExpr(e.E, wr, inLetExprBody);
+      //     }
+      //     else {
+      //       TrExprAsInt(e.E, wr, inLetExprBody);
+      //     }
+      //   }
+      //   else {
+      //     // (int or bv or char) -> (int or bv or ORDINAL)
+      //     var fromNative = AsNativeType(e.E.Type);
+      //     var toNative = AsNativeType(e.ToType);
+      //     if (fromNative == null && toNative == null) {
+      //       if (e.E.Type.IsCharType) {
+      //         // char -> big-integer (int or bv or ORDINAL)
+      //         wr.Write("java.math.BigInteger.valueOf");
+      //         TrParenExpr(e.E, wr, inLetExprBody);
+      //       }
+      //       else {
+      //         // big-integer (int or bv) -> big-integer (int or bv or ORDINAL), so identity will do
+      //         TrExpr(e.E, wr, inLetExprBody);
+      //       }
+      //     }
+      //     else if (fromNative != null && toNative == null) {
+      //       // native (int or bv) -> big-integer (int or bv)
+      //       if (fromNative.Sel == NativeType.Selection.ULong) {
+      //         // Can't just use .longValue() because that may return a negative
+      //         wr.Write($"{DafnyHelpersClass}.unsignedLongToBigInteger");
+      //         TrParenExpr(e.E, wr, inLetExprBody);
+      //       }
+      //       else {
+      //         wr.Write("java.math.BigInteger.valueOf(");
+      //         if (fromNative.LowerBound >= 0) {
+      //           TrParenExpr($"{GetBoxedNativeTypeName(fromNative)}.toUnsignedLong", e.E, wr, inLetExprBody);
+      //         }
+      //         else {
+      //           TrParenExpr(e.E, wr, inLetExprBody);
+      //         }
+      //
+      //         wr.Write(")");
+      //       }
+      //     }
+      //     else if (fromNative != null && NativeTypeSize(toNative) == NativeTypeSize(fromNative)) {
+      //       // native (int or bv) -> native (int or bv)
+      //       // Cast between signed and unsigned, which have the same Java type
+      //       TrParenExpr(e.E, wr, inLetExprBody);
+      //     }
+      //     else {
+      //       GetNativeInfo(toNative.Sel, out var toNativeName, out var toNativeSuffix, out var toNativeNeedsCast);
+      //       // any (int or bv) -> native (int or bv)
+      //       // A cast would do, but we also consider some optimizations
+      //       var literal = PartiallyEvaluate(e.E);
+      //       UnaryOpExpr u = e.E.Resolved as UnaryOpExpr;
+      //       MemberSelectExpr m = e.E.Resolved as MemberSelectExpr;
+      //       if (literal != null) {
+      //         // Optimize constant to avoid intermediate BigInteger
+      //         EmitNativeIntegerLiteral((BigInteger) literal, toNative, wr);
+      //       }
+      //       else if (u != null && u.Op == UnaryOpExpr.Opcode.Cardinality) {
+      //         // Optimize || to avoid intermediate BigInteger
+      //         wr.Write(CastIfSmallNativeType(e.ToType));
+      //         TrParenExpr("", u.E, wr, inLetExprBody);
+      //         wr.Write(".cardinalityInt()");
+      //       }
+      //       else if (m != null && m.MemberName == "Length" && m.Obj.Type.IsArrayType) {
+      //         // Optimize .length to avoid intermediate BigInteger
+      //         wr.Write(CastIfSmallNativeType(e.ToType));
+      //         var elmtType = UserDefinedType.ArrayElementType(m.Obj.Type);
+      //         TargetWriter w;
+      //         if (elmtType.IsTypeParameter) {
+      //           wr.Write($"{FormatTypeDescriptorVariable(elmtType.AsTypeParameter)}.getArrayLength(");
+      //           w = wr.Fork();
+      //           wr.Write(")");
+      //         }
+      //         else {
+      //           w = wr.Fork();
+      //           wr.Write(".length");
+      //         }
+      //
+      //         TrParenExpr(m.Obj, w, inLetExprBody);
+      //       }
+      //       else {
+      //         // no optimization applies; use the standard translation
+      //         if (fromNative != null && fromNative.LowerBound >= 0 &&
+      //             NativeTypeSize(fromNative) < NativeTypeSize(toNative)) {
+      //           // Widening an unsigned value; careful!!
+      //           wr.Write($"{CastIfSmallNativeType(e.ToType)}{GetBoxedNativeTypeName(fromNative)}");
+      //           if (NativeTypeSize(toNative) == 64) {
+      //             wr.Write(".toUnsignedLong");
+      //           }
+      //           else {
+      //             wr.Write(".toUnsignedInt");
+      //           }
+      //
+      //           TrParenExpr(e.E, wr, inLetExprBody);
+      //         }
+      //         else {
+      //           if (fromNative == null && !e.E.Type.IsCharType) {
+      //             TrParenExpr(e.E, wr, inLetExprBody);
+      //             wr.Write($".{toNativeName}Value()");
+      //           }
+      //           else {
+      //             wr.Write($"(({toNativeName}) ");
+      //             TrParenExpr(e.E, wr, inLetExprBody);
+      //             wr.Write(")");
+      //           }
+      //         }
+      //       }
+      //     }
+      //   }
+      // }
+      // else if (e.E.Type.IsNumericBased(Type.NumericPersuation.Real)) {
+      //   Contract.Assert(AsNativeType(e.E.Type) == null);
+      //   if (e.ToType.IsNumericBased(Type.NumericPersuation.Real)) {
+      //     // real -> real
+      //     Contract.Assert(AsNativeType(e.ToType) == null);
+      //     TrExpr(e.E, wr, inLetExprBody);
+      //   }
+      //   else if (e.ToType.IsCharType) {
+      //     // real -> char
+      //     // Painfully, Java sign-extends bytes when casting to chars ...
+      //     wr.Write("(char)");
+      //     TrParenExpr(e.E, wr, inLetExprBody);
+      //     wr.Write(".ToBigInteger().intValue()");
+      //   }
+      //   else {
+      //     // real -> (int or bv)
+      //     TrParenExpr(e.E, wr, inLetExprBody);
+      //     wr.Write(".ToBigInteger()");
+      //     if (AsNativeType(e.ToType) != null) {
+      //       wr.Write($".{GetNativeTypeName(AsNativeType(e.ToType))}Value()");
+      //     }
+      //   }
+      // }
+      // else {
+      //   Contract.Assert(e.E.Type.IsBigOrdinalType);
+      //   Contract.Assert(e.ToType.IsNumericBased(Type.NumericPersuation.Int));
+      //   TrParenExpr(e.E, wr, inLetExprBody);
+      //   if (AsNativeType(e.ToType) != null) {
+      //     wr.Write($".{GetNativeTypeName(AsNativeType(e.ToType))}Value()");
+      //   }
+      // }
     }
 
     protected override BlockTargetWriter CreateStaticMain(IClassWriter cw) {
