@@ -952,6 +952,7 @@ namespace Microsoft.Dafny {
           Contract.Assert(enclosingMethod == null);
           enclosingMethod = m;
           md.body = (AST.BlockStatement)TrStmt(m.Body); // TODO
+          md.body.initialIndent = false;
           // TODO: TrStmtList(m.Body.Body, w);
           Contract.Assert(enclosingMethod == m);
           enclosingMethod = null;
@@ -4823,21 +4824,26 @@ namespace Microsoft.Dafny {
       Contract.Requires(stmt != null);
       Contract.Requires(errorWr != null);
 
+      AST.Statement ast = null;
       if (stmt.IsGhost) {
-        Console.WriteLine("Not implemented: ghost statement"); // TODO
-        // var v = new CheckHasNoAssumes_Visitor(this, wr);
-        // v.Visit(stmt);
-        return null;
-      }
-
-      if (stmt is PrintStmt) {
+        if (stmt is AssumeStmt) {
+          ast = new AST.ExpressionStatement("assume", TrExpr(((AssumeStmt) stmt).Expr));
+        } else if (stmt is AssertStmt) {
+          ast = new AST.ExpressionStatement("assert", TrExpr(((AssertStmt) stmt).Expr));
+        } else {
+          Console.WriteLine("Not implemented: ghost statement"); // TODO
+          // var v = new CheckHasNoAssumes_Visitor(this, wr);
+          // v.Visit(stmt);
+          return null;
+        }
+      } else if (stmt is PrintStmt) {
         PrintStmt ps = (PrintStmt) stmt;
         AST.BlockStatement bl = new AST.BlockStatement();
         foreach (Expression e in ps.Args) {
           bl.statements.Add(new AST.ExpressionStatement(new AST.Apply(new AST.Identifier("System.out.print"),TrExpr(e))));
         }
         bl.noscope = true;
-        return bl;
+        ast = bl;
         // var s = (PrintStmt) stmt;
         // foreach (var arg in s.Args) {
         //   EmitPrintStmt(wr, arg);
@@ -4851,15 +4857,15 @@ namespace Microsoft.Dafny {
         AssignmentRhs r = p.rhss.First();
         if (r is ExprRhs) {
           ExprRhs erhs = (ExprRhs) r;
-          return new AST.ReturnStatement(TrExpr(erhs.Expr));
+          ast = new AST.ReturnStatement(TrExpr(erhs.Expr));
         } else if (r is TypeRhs) {
           TypeRhs tr = (TypeRhs)r;
           Expression f = tr.ArrayDimensions.First();
           AST.Expression e = new AST.NewArray(TrType(tr.EType), TrExpr(f));
-          return new AST.ReturnStatement(e);
+          ast = new AST.ReturnStatement(e);
         } else {
           AST.Expression e = new AST.CommentExpr("Not implemented kind of AssignmentRhs");
-          return new AST.ReturnStatement(e);
+          ast = new AST.ReturnStatement(e);
         }
       } else if (stmt is YieldStmt) {
         YieldStmt p = (YieldStmt) stmt;
@@ -4928,12 +4934,12 @@ namespace Microsoft.Dafny {
           AST.Expression lhs = TrExpr(s.Lhss.First());
           AssignmentRhs r = s.Rhss.First();
           AST.Expression rhs = TrAssignmentRhs(r);
-          AST.AssignStatement ast = new AST.AssignStatement(lhs, rhs);
-          return ast; // TODO - multiple left and right sides
+          ast = new AST.AssignStatement(lhs, rhs);
+           // TODO - multiple left and right sides
         } else {
           AssignmentRhs r = s.Rhss.First();
           AST.Expression arg = TrAssignmentRhs(r);
-          return new AST.ExpressionStatement(arg);
+          ast = new AST.ExpressionStatement(arg);
         }
 
       } else if (stmt is AssignStmt) {
@@ -5017,13 +5023,14 @@ namespace Microsoft.Dafny {
         // TrCallStmt(s, null, wr);
 
       } else if (stmt is BlockStmt) {
-        AST.BlockStatement ast = new AST.BlockStatement();
+        AST.BlockStatement astbl = new AST.BlockStatement();
         BlockStmt bl = (BlockStmt)stmt;
         foreach (Statement s in bl.Body) {
           AST.Statement st = TrStmt(s);
-          if (st != null) ast.statements.Add(st);
+          if (st != null) astbl.statements.Add(st);
         }
-        return ast;
+        astbl.initialIndent = bl.Labels == null;
+        ast = astbl;
         
       } else if (stmt is IfStmt) {
         IfStmt s = (IfStmt) stmt;
@@ -5340,7 +5347,7 @@ namespace Microsoft.Dafny {
         if (exprs.Count() != 0) {
           init= TrAssignmentRhs(exprs.First());
         }
-        return new AST.VarDeclaration(v.Name, t, init);
+        ast = new AST.VarDeclaration(v.Name, t, init);
         Console.WriteLine("Not implemented: var decl statement");
         return null;  // TODO
         // var i = 0;
@@ -5385,6 +5392,8 @@ namespace Microsoft.Dafny {
         Contract.Assert(false);
         throw new cce.UnreachableException(); // unexpected statement
       }
+      
+      return addLabels(stmt.Labels, ast);
     }
     
     protected AST.Expression TrExpr(Expression expr) {
@@ -6009,6 +6018,15 @@ namespace Microsoft.Dafny {
 
     List<AST.Expression> arglist(params AST.Expression[] e) {
       return new List<AST.Expression>(e);
+    }
+
+    AST.Statement addLabels(LList<Label> labels, AST.Statement statement) {
+      AST.Statement s = statement;
+      if (labels != null) {
+        s = addLabels(labels.Next, s);
+        s = new AST.LabelledStatement(labels.Data.Name, s);
+      }
+      return s;
     }
 
   }

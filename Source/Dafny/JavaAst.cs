@@ -37,6 +37,7 @@ namespace Microsoft.Dafny.Java {
       public abstract R visit(SimpleType ast, T arg);
       public abstract R visit(ArrayType ast, T arg);
       public abstract R visit(CommentStatement ast, T arg);
+      public abstract R visit(LabelledStatement ast, T arg);
       public abstract R visit(CommentExpr ast, T arg);
       public abstract R visit(ClassDeclaration ast, T arg);
       public abstract R visit(MethodDeclaration ast, T arg);
@@ -212,6 +213,7 @@ namespace Microsoft.Dafny.Java {
     public class BlockStatement : Statement {
       public List<Statement> statements;
       public bool noscope = false;
+      public bool initialIndent = false;
 
       public BlockStatement(List<Statement> statements) {
         this.statements = statements;
@@ -226,6 +228,7 @@ namespace Microsoft.Dafny.Java {
 
       public BlockStatement(BlockStatement ast) : this(ast.statements) {
         this.noscope = ast.noscope;
+        this.initialIndent = ast.initialIndent;
       }
 
       public override R accept<R, T>(IVisitor<R, T> v, T arg) {
@@ -242,6 +245,23 @@ namespace Microsoft.Dafny.Java {
       }
 
       public CommentStatement(CommentStatement ast) : this(ast.text) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
+
+    public class LabelledStatement : Statement {
+      public string label;
+      public Statement statement;
+
+      public LabelledStatement(string label, Statement statement) {
+        this.label = label;
+        this.statement = statement;
+      }
+
+      public LabelledStatement(LabelledStatement ast) : this(ast.label, ast.statement) {
       }
 
       public override R accept<R, T>(IVisitor<R, T> v, T arg) {
@@ -280,13 +300,20 @@ namespace Microsoft.Dafny.Java {
     }
 
     public class ExpressionStatement : Statement {
+      public string kind;
       public Expression arg;
 
       public ExpressionStatement(Expression arg) {
+        this.kind = null;
         this.arg = arg;
       }
 
-      public ExpressionStatement(ExpressionStatement e): this(e.arg) {
+      public ExpressionStatement(string kind, Expression arg) {
+        this.kind = kind;
+        this.arg = arg;
+      }
+
+      public ExpressionStatement(ExpressionStatement e): this(e.kind,e.arg) {
       }
       public override R accept<R, T>(IVisitor<R, T> v, T arg) {
         return v.visit(this, arg);
@@ -651,14 +678,22 @@ namespace Microsoft.Dafny.Java {
           foreach (Statement s in ast.statements) ret = ret + print(s, indent);
           return ret;
         } else {
-          string ret = "{" + eol;
+          string ret = (ast.initialIndent?indent:"") + "{" + eol;
           foreach (Statement s in ast.statements) ret = ret + print(s, indent + indentamt);
           return ret + indent + "}" + eol;
         }
       }
 
+      public override string visit(LabelledStatement ast, string ident) {
+        return ident + ast.label + ": " + print(ast.statement, ident); // TODO - indenting likely wrong
+      }
+
       public override string visit(ExpressionStatement ast, string indent) {
-        return indent + inline(ast.arg) + ";" + eol;
+        if (ast.kind == null) {
+          return indent + inline(ast.arg) + ";" + eol;
+        } else {
+          return indent + "//@ " + ast.kind + " " + inline(ast.arg) + ";" + eol;
+        }
       }
 
       public override string visit(AssignStatement ast, string indent) {
