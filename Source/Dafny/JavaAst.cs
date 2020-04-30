@@ -41,6 +41,7 @@ namespace Microsoft.Dafny.Java {
       public abstract R visit(ClassDeclaration ast, T arg);
       public abstract R visit(MethodDeclaration ast, T arg);
       public abstract R visit(BlockStatement ast, T arg);
+      public abstract R visit(ExpressionStatement ast, T arg);
       public abstract R visit(AssignStatement ast, T arg);
       public abstract R visit(ReturnStatement ast, T arg);
       public abstract R visit(Identifier ast, T arg);
@@ -210,11 +211,12 @@ namespace Microsoft.Dafny.Java {
 
     public class BlockStatement : Statement {
       public List<Statement> statements;
+      public bool noscope = false;
 
       public BlockStatement(List<Statement> statements) {
         this.statements = statements;
       }
-      public BlockStatement(Statement[] statements) {
+      public BlockStatement(params Statement[] statements) {
         this.statements = new List<Statement>(statements);
       }
 
@@ -223,6 +225,7 @@ namespace Microsoft.Dafny.Java {
       }
 
       public BlockStatement(BlockStatement ast) : this(ast.statements) {
+        this.noscope = ast.noscope;
       }
 
       public override R accept<R, T>(IVisitor<R, T> v, T arg) {
@@ -275,6 +278,20 @@ namespace Microsoft.Dafny.Java {
         return v.visit(this, arg);
       }
     }
+
+    public class ExpressionStatement : Statement {
+      public Expression arg;
+
+      public ExpressionStatement(Expression arg) {
+        this.arg = arg;
+      }
+
+      public ExpressionStatement(ExpressionStatement e): this(e.arg) {
+      }
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
     public class AssignStatement : Statement {
       public Expression lhs;
       public Expression rhs;
@@ -290,7 +307,6 @@ namespace Microsoft.Dafny.Java {
       public override R accept<R, T>(IVisitor<R, T> v, T arg) {
         return v.visit(this, arg);
       }
-
     }
 
     public class Paren : Expression {
@@ -471,6 +487,11 @@ namespace Microsoft.Dafny.Java {
         this.args = args;
       }
 
+      public Apply(Expression method, params Expression[] args) {
+        this.method = method;
+        this.args = new List<Expression>(args);
+      }
+
       public Apply(Apply e) : this(e.method, e.args) {
       }
 
@@ -625,9 +646,19 @@ namespace Microsoft.Dafny.Java {
       }
 
       public override string visit(BlockStatement ast, string indent) {
-        string ret = "{" + eol;
-        foreach (Statement s in ast.statements) ret = ret + print(s, indent + indentamt);
-        return ret + indent + "}" + eol;
+        if (ast.noscope) {
+          string ret = "";
+          foreach (Statement s in ast.statements) ret = ret + print(s, indent);
+          return ret;
+        } else {
+          string ret = "{" + eol;
+          foreach (Statement s in ast.statements) ret = ret + print(s, indent + indentamt);
+          return ret + indent + "}" + eol;
+        }
+      }
+
+      public override string visit(ExpressionStatement ast, string indent) {
+        return indent + inline(ast.arg) + ";" + eol;
       }
 
       public override string visit(AssignStatement ast, string indent) {

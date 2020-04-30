@@ -4831,8 +4831,13 @@ namespace Microsoft.Dafny {
       }
 
       if (stmt is PrintStmt) {
-        Console.WriteLine("Not implemented: print statement");
-        return null;  // TODO
+        PrintStmt ps = (PrintStmt) stmt;
+        AST.BlockStatement bl = new AST.BlockStatement();
+        foreach (Expression e in ps.Args) {
+          bl.statements.Add(new AST.ExpressionStatement(new AST.Apply(new AST.Identifier("System.out.print"),TrExpr(e))));
+        }
+        bl.noscope = true;
+        return bl;
         // var s = (PrintStmt) stmt;
         // foreach (var arg in s.Args) {
         //   EmitPrintStmt(wr, arg);
@@ -4919,11 +4924,17 @@ namespace Microsoft.Dafny {
         //   }
       } else if (stmt is UpdateStmt) {
         UpdateStmt s = (UpdateStmt) stmt;
-        AST.Expression lhs = TrExpr(s.Lhss.First());
-        AssignmentRhs r = s.Rhss.First();
-        AST.Expression rhs = TrAssignmentRhs(r);
-        AST.AssignStatement ast = new AST.AssignStatement(lhs,rhs);
-        return ast;  // TODO - multiple left and right sides
+        if (s.Lhss.Count > 0) {
+          AST.Expression lhs = TrExpr(s.Lhss.First());
+          AssignmentRhs r = s.Rhss.First();
+          AST.Expression rhs = TrAssignmentRhs(r);
+          AST.AssignStatement ast = new AST.AssignStatement(lhs, rhs);
+          return ast; // TODO - multiple left and right sides
+        } else {
+          AssignmentRhs r = s.Rhss.First();
+          AST.Expression arg = TrAssignmentRhs(r);
+          return new AST.ExpressionStatement(arg);
+        }
 
       } else if (stmt is AssignStmt) {
         Console.WriteLine("Not implemented: assign statement");
@@ -5381,7 +5392,12 @@ namespace Microsoft.Dafny {
       Contract.Requires(errorWr != null); 
       if (expr is LiteralExpr) {
         LiteralExpr e = (LiteralExpr)expr;
-        return new AST.Literal(e.Value.ToString());
+        Object v = e.Value;
+        string s;
+        if (v is bool) s = (bool) e.Value ? "true" : "false";
+        else if (v is string) s = "\"" + v.ToString() + "\"";
+        else s = v.ToString();
+        return new AST.Literal(s);
         //EmitLiteralExpr(wr, e);
 
       } else if (expr is ThisExpr) {
@@ -5540,7 +5556,7 @@ namespace Microsoft.Dafny {
         // EmitDatatypeValue(dtv, wrArgumentList.ToString(), wr);
 
       } else if (expr is OldExpr) {
-        return new AST.Apply(new AST.Identifier("\\old"), arglist(TrExpr(((OldExpr)expr).E)));
+        return new AST.Apply(new AST.Identifier("\\old"), TrExpr(((OldExpr)expr).E));
         Contract.Assert(false); throw new cce.UnreachableException();  // 'old' is always a ghost
         return new AST.CommentExpr("OldExpr is not implemented"); // TODO
 
@@ -5562,7 +5578,7 @@ namespace Microsoft.Dafny {
             return new AST.CommentExpr("UnaryOpExpr-Cardinality is not implemented"); // TODO
             break;
           case UnaryOpExpr.Opcode.Fresh: 
-            ast = new AST.Apply(new AST.Identifier("\\fresh"), arglist(arg));
+            ast = new AST.Apply(new AST.Identifier("\\fresh"), arg);
             break;
           default:
             ast = new AST.CommentExpr("UnaryOpExpr is not implemented"); // TODO
