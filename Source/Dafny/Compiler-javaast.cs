@@ -44,6 +44,8 @@ namespace Microsoft.Dafny {
     const string DafnyMultiArrayClassPrefix = "dafny.Array";
     const string DafnyTupleClassPrefix = "dafny.Tuple";
 
+    private TextWriter errorWr;
+    public Dictionary<string, string> results = null;
     string DafnyMultiArrayClass(int dim) => DafnyMultiArrayClassPrefix + dim;
     string DafnyTupleClass(int size) => DafnyTupleClassPrefix + size;
 
@@ -99,6 +101,17 @@ namespace Microsoft.Dafny {
     public override void Compile(Program program, TargetWriter wrx) {
       Contract.Requires(program != null);
 
+      string filename = program.FullName;
+      if (filename.EndsWith(".dfy")) filename = filename.Substring(0, filename.Length - 3) + "java";
+      else filename = filename + ".java";
+      
+      string root = program.FullName;
+      root = root.Substring(0,root.Length - 4); // remove .dfy
+      int k = root.LastIndexOf('.');
+      if (k >= 0) root = root.Substring(k+1);
+      k = root.LastIndexOf('\\');
+      if (k >= 0) root = root.Substring(k + 1);
+
       Java.AST.CompilationUnit cu = new Java.AST.CompilationUnit();
       currentCompilationUnit = cu;
       //cu.name = program.name;
@@ -135,7 +148,7 @@ namespace Microsoft.Dafny {
 
         var wr = CreateModule(m.CompileName, m.IsDefaultModule, moduleIsExtern, libraryName, wrx);
         foreach (TopLevelDecl d in m.TopLevelDecls) {
-          bool compileIt = true;
+           bool compileIt = true;
           if (Attributes.ContainsBool(d.Attributes, "compile", ref compileIt) && !compileIt) {
             continue;
           }
@@ -208,7 +221,9 @@ namespace Microsoft.Dafny {
               }
             }
 
-            AST.ClassDeclaration ast = CreateClass(cl, wr);
+            errorWr = wr;
+
+            AST.ClassDeclaration ast = CreateClass(cl, root);
             cu.declarations.Add(ast);
             // if (include) {
             //   var cw = CreateClass(IdName(cl), classIsExtern, cl.FullName, cl.TypeArgs, cl.TraitsTyp, cl.tok, wr);
@@ -234,7 +249,9 @@ namespace Microsoft.Dafny {
 //        FinishModule();
       }
 
-      Console.WriteLine(cu.toString());
+      string javaProgram = AST.Printer.print(cu);
+      System.IO.File.WriteAllText(filename, javaProgram);
+      Console.WriteLine(javaProgram);
       Console.WriteLine("END");
     }
 
@@ -549,8 +566,11 @@ namespace Microsoft.Dafny {
       // }
     }
 
-    protected AST.ClassDeclaration CreateClass(ClassDecl cl, TextWriter errorWr) {
+    protected AST.ClassDeclaration CreateClass(ClassDecl cl, string root) {
       string name = IdName(cl);
+      if (cl.IsDefaultClass) {
+        name = root;
+      }
       var include = true;
       if (cl.IsDefaultClass) {
         Predicate<MemberDecl> compilationMaterial = x =>
@@ -852,7 +872,7 @@ namespace Microsoft.Dafny {
             // Contract.Assert(w == null);  // since we requested no body
           }
           else {
-            cd.members.Add(CompileMethod(m, errorWr));
+            cd.members.Add(CompileMethod(m));
           }
         }
         else {
@@ -865,8 +885,8 @@ namespace Microsoft.Dafny {
     }
 
 
-    private AST.MethodDeclaration CompileMethod(Method m, TextWriter w) {
-      Contract.Requires(w != null);
+    private AST.MethodDeclaration CompileMethod(Method m) {
+      Contract.Requires(errorWr != null);
       Contract.Requires(m != null);
       Contract.Requires(m.Body != null);
 
@@ -874,17 +894,33 @@ namespace Microsoft.Dafny {
       md.name = m.Name;
       md.formals = new List<AST.VarDeclaration>();
       md.body = new AST.BlockStatement(new List<AST.Statement>());
+      md.modifiers = "public";
+      if (m.IsStatic) md.modifiers = "public static";
 
       if (m.Outs.Count == 0) md.returnType = new AST.SimpleType("void");
       else md.returnType = TrType(m.Outs.First().Type);
 
       foreach (MaybeFreeExpression e in m.Req) {
-        md.clauses.Add(new AST.RequiresClause(TrExpr(e.E, w)));
+        md.clauses.Add(new AST.RequiresClause(TrExpr(e.E)));
       }
-      
+
+      Contract.Assert(results == null);
+      results = new Dictionary<string,string>();
+      if (m.Outs.Count == 1) {
+        results.Add(m.Outs.First().Name, "\\result");
+      } else {
+        foreach (Formal f in m.Outs) {
+          string name = f.Name;
+          results.Add(name, "\\result." + name);
+        }
+      }
+
       foreach (MaybeFreeExpression e in m.Ens) {
-        md.clauses.Add(new AST.EnsuresClause(TrExpr(e.E, w)));
+        md.clauses.Add(new AST.EnsuresClause(TrExpr(e.E)));
       }
+
+      results.Clear();
+      results = null;
       
       //var w = cw.CreateMethod(m, !m.IsExtern(out _, out _));
       {
@@ -910,12 +946,12 @@ namespace Microsoft.Dafny {
         // TODO w = EmitMethodReturns(m, w);
 
         if (m.Body == null) {
-          Error(m.tok, "Method {0} has no body", w, m.FullName);
+          Error(m.tok, "Method {0} has no body", errorWr, m.FullName);
         }
         else {
           Contract.Assert(enclosingMethod == null);
           enclosingMethod = m;
-          md.body = (AST.BlockStatement)TrStmt(m.Body, w); // TODO
+          md.body = (AST.BlockStatement)TrStmt(m.Body); // TODO
           // TODO: TrStmtList(m.Body.Body, w);
           Contract.Assert(enclosingMethod == m);
           enclosingMethod = null;
@@ -936,6 +972,14 @@ namespace Microsoft.Dafny {
         //   } else {
         //     w.WriteLine("{0}();", IdName(m));
         //   }
+      }
+
+      if (IsMain(m)) {
+        md.name = "main";
+        md.formals = new List<AST.VarDeclaration>();
+        AST.Type t = new AST.ArrayType(new AST.SimpleType("String"), 1);
+        AST.VarDeclaration v = new AST.VarDeclaration("args",t,null);
+        md.formals.Add(v);
       }
 
       return md;
@@ -4774,9 +4818,9 @@ namespace Microsoft.Dafny {
     }
 
 
-    AST.Statement TrStmt(Statement stmt, TextWriter wr) {
+    AST.Statement TrStmt(Statement stmt) {
       Contract.Requires(stmt != null);
-      Contract.Requires(wr != null);
+      Contract.Requires(errorWr != null);
 
       if (stmt.IsGhost) {
         Console.WriteLine("Not implemented: ghost statement"); // TODO
@@ -4801,11 +4845,11 @@ namespace Microsoft.Dafny {
         AssignmentRhs r = p.rhss.First();
         if (r is ExprRhs) {
           ExprRhs erhs = (ExprRhs) r;
-          return new AST.ReturnStatement(TrExpr(erhs.Expr, wr));
+          return new AST.ReturnStatement(TrExpr(erhs.Expr));
         } else if (r is TypeRhs) {
           TypeRhs tr = (TypeRhs)r;
           Expression f = tr.ArrayDimensions.First();
-          AST.Expression e = new AST.NewArray(TrType(tr.EType), TrExpr(f,wr));
+          AST.Expression e = new AST.NewArray(TrType(tr.EType), TrExpr(f));
           return new AST.ReturnStatement(e);
         } else {
           AST.Expression e = new AST.CommentExpr("Not implemented kind of AssignmentRhs");
@@ -4874,7 +4918,7 @@ namespace Microsoft.Dafny {
         //   }
       } else if (stmt is UpdateStmt) {
         UpdateStmt s = (UpdateStmt) stmt;
-        AST.Expression lhs = TrExpr(s.Lhss.First(), wr);
+        AST.Expression lhs = TrExpr(s.Lhss.First());
         AssignmentRhs r = s.Rhss.First();
         AST.Expression rhs = TrAssignmentRhs(r);
         AST.AssignStatement ast = new AST.AssignStatement(lhs,rhs);
@@ -4964,7 +5008,7 @@ namespace Microsoft.Dafny {
         AST.BlockStatement ast = new AST.BlockStatement();
         BlockStmt bl = (BlockStmt)stmt;
         foreach (Statement s in bl.Body) {
-          AST.Statement st = TrStmt(s, wr);
+          AST.Statement st = TrStmt(s);
           if (st != null) ast.statements.Add(st);
         }
         return ast;
@@ -5059,7 +5103,7 @@ namespace Microsoft.Dafny {
         WhileStmt s = (WhileStmt) stmt;
         if (s.Body == null) {
           // this checks non-ghost body-less while statements
-          Error(stmt.Tok, "a while statement without a body cannot be compiled", wr);
+          Error(stmt.Tok, "a while statement without a body cannot be compiled", errorWr);
           return null;
         }
 
@@ -5086,7 +5130,7 @@ namespace Microsoft.Dafny {
       } else if (stmt is AlternativeLoopStmt) {
         var s = (AlternativeLoopStmt) stmt;
         if (DafnyOptions.O.ForbidNondeterminism) {
-          Error(s.Tok, "case-based loop forbidden by /definiteAssignment:3 option", wr);
+          Error(s.Tok, "case-based loop forbidden by /definiteAssignment:3 option", errorWr);
         }
         Console.WriteLine("Not implemented: AlternativeLoop statement");
         return null;  // TODO
@@ -5116,7 +5160,7 @@ namespace Microsoft.Dafny {
         }
         else if (s.BoundVars.Count == 0) {
           // the bound variables just spell out a single point, so the forall statement is equivalent to one execution of the body
-          TrStmt(s.Body, wr);
+          TrStmt(s.Body);
           return null;
         }
         Console.WriteLine("Not implemented: forall statement");
@@ -5331,22 +5375,25 @@ namespace Microsoft.Dafny {
       }
     }
     
-    protected AST.Expression TrExpr(Expression expr, TextWriter wr) {
+    protected AST.Expression TrExpr(Expression expr) {
       Contract.Requires(expr != null);
-      Contract.Requires(wr != null); 
-      bool inLetExprBody = false;
+      Contract.Requires(errorWr != null); 
       if (expr is LiteralExpr) {
         LiteralExpr e = (LiteralExpr)expr;
         return new AST.Literal(e.Value.ToString());
         //EmitLiteralExpr(wr, e);
 
       } else if (expr is ThisExpr) {
-        return new AST.CommentExpr("ThisExpr is not implemented"); // TODO
-        //EmitThis(wr);
+        return new AST.Identifier("this");
 
       } else if (expr is IdentifierExpr) {
         var e = (IdentifierExpr)expr;
-        return new AST.Identifier(e.ToString()); // TODO
+        string n = e.Name;
+        if (results != null) {
+          n = results[n];
+          if (n == null) n = e.Name;
+        }
+        return new AST.Identifier(n); // TODO
 
         // if (e.Var is Formal && inLetExprBody && !((Formal)e.Var).InParam) {
         //   // out param in letExpr body, need to copy it to a temp since
@@ -5381,8 +5428,8 @@ namespace Microsoft.Dafny {
 
       } else if (expr is MemberSelectExpr) {
         MemberSelectExpr e = (MemberSelectExpr)expr;
-        SpecialField sf = e.Member as SpecialField;
-        return new AST.Select(TrExpr(e.Obj,wr), e.MemberName); // TODO
+        //SpecialField sf = e.Member as SpecialField;
+        return new AST.Select(TrExpr(e.Obj), e.MemberName); // TODO
 
         // if (sf != null) {
         //   string compiledName, preStr, postStr;
@@ -5412,7 +5459,7 @@ namespace Microsoft.Dafny {
         SeqSelectExpr e = (SeqSelectExpr)expr;
         Contract.Assert(e.Seq.Type != null);
         if (e.SelectOne) {
-          return new AST.Index(TrExpr(e.Seq, wr), TrExpr(e.E0, wr));
+          return new AST.Index(TrExpr(e.Seq), TrExpr(e.E0));
         } else {
           return new AST.CommentExpr("Multi-SeqSelectExpr not implemented");
         }
@@ -5458,6 +5505,7 @@ namespace Microsoft.Dafny {
 
       } else if (expr is FunctionCallExpr) {
         FunctionCallExpr e = (FunctionCallExpr)expr;
+        return new AST.Apply(new AST.Identifier(e.Name), TrArgs(e.Args));
         return new AST.CommentExpr("FunctionCallExpr is not implemented"); // TODO
 
         // if (e.Function is SpecialFunction) {
@@ -5491,12 +5539,13 @@ namespace Microsoft.Dafny {
         // EmitDatatypeValue(dtv, wrArgumentList.ToString(), wr);
 
       } else if (expr is OldExpr) {
+        return new AST.Apply(new AST.Identifier("\\old"), arglist(TrExpr(((OldExpr)expr).E)));
         Contract.Assert(false); throw new cce.UnreachableException();  // 'old' is always a ghost
         return new AST.CommentExpr("OldExpr is not implemented"); // TODO
 
       } else if (expr is UnaryOpExpr) {
         var e = (UnaryOpExpr)expr;
-        AST.Expression arg = TrExpr(e.E, null);
+        AST.Expression arg = TrExpr(e.E);
         AST.Expression ast = null;
         switch (e.Op) {
           case UnaryOpExpr.Opcode.Not:
@@ -5511,10 +5560,8 @@ namespace Microsoft.Dafny {
           case UnaryOpExpr.Opcode.Cardinality:
             return new AST.CommentExpr("UnaryOpExpr-Cardinality is not implemented"); // TODO
             break;
-          case UnaryOpExpr.Opcode.Fresh:
-            List<AST.Expression> list = new List<AST.Expression>();
-            list.Add(arg);
-            ast = new AST.Apply(new AST.Identifier("\\fresh"), list);
+          case UnaryOpExpr.Opcode.Fresh: 
+            ast = new AST.Apply(new AST.Identifier("\\fresh"), arglist(arg));
             break;
           default:
             ast = new AST.CommentExpr("UnaryOpExpr is not implemented"); // TODO
@@ -5530,8 +5577,8 @@ namespace Microsoft.Dafny {
 
       } else if (expr is BinaryExpr) {
         var e = (BinaryExpr)expr;
-        AST.Expression lhs = TrExpr(e.E0, wr);
-        AST.Expression rhs = TrExpr(e.E1, wr);
+        AST.Expression lhs = TrExpr(e.E0);
+        AST.Expression rhs = TrExpr(e.E1);
         string op = null;
         switch (e.Op) {
           case BinaryExpr.Opcode.Eq: op = "="; break;
@@ -5548,10 +5595,17 @@ namespace Microsoft.Dafny {
           case BinaryExpr.Opcode.And: op = "&&"; break;
           case BinaryExpr.Opcode.Or: op = "||"; break;
           case BinaryExpr.Opcode.Imp: op = "==>"; break;
-          default: break; // TODO - more cases
+          case BinaryExpr.Opcode.Iff: op = "<==>"; break;
+          case BinaryExpr.Opcode.BitwiseAnd: op = "&"; break;
+          case BinaryExpr.Opcode.BitwiseOr: op = "|"; break;
+          case BinaryExpr.Opcode.BitwiseXor: op = "^"; break;
+          case BinaryExpr.Opcode.RightShift: op = "<<"; break;
+          case BinaryExpr.Opcode.LeftShift: op = ">>"; break;
+          // TODO: Disjoint, In, NotIn, Exp,
+          default: break; // TODO - more cases; need to check that precedence is the same
         }
 
-        if (op == null) return new AST.CommentExpr("BinaryExpr is not implemented"); // TODO
+        if (op == null) return new AST.CommentExpr("BinaryExpr is not implemented for given op"); // TODO
         else return new AST.Binary(lhs, op, rhs);
         // if (IsComparisonToZero(e, out var arg, out var sign, out var negated) &&
         //     CompareZeroUsingSign(arg.Type)) {
@@ -5861,22 +5915,22 @@ namespace Microsoft.Dafny {
 
     } else if (expr is NameSegment) {
         var e = (NameSegment) expr;
-        return new AST.Identifier(e.Name);
+        string n = e.Name;
+        if (results != null) { // TODO: Should only do lookup on simple variables
+          n = results[n];
+          if (n == null) n = e.Name;
+        }
+        return new AST.Identifier(n);
         
       } else if (expr is ApplySuffix) {
         var e = (ApplySuffix) expr;
-        List<AST.Expression> list = new List<AST.Expression>();
-        foreach (Expression ex in e.Args) {
-          list.Add(TrExpr(ex, wr));
-        }
-
-        return new AST.Apply(TrExpr(e.Lhs, wr), list);
+        return new AST.Apply(TrExpr(e.Lhs), TrArgs(e.Args));
 
       } else if (expr is ExprDotName) {
         var e = (ExprDotName)expr;
         String suffix = e.SuffixName;
         if (suffix == "Length") suffix = "length";
-        AST.Expression arg = TrExpr(e.Lhs, wr);
+        AST.Expression arg = TrExpr(e.Lhs);
         return new AST.Suffix(arg, suffix);
         
       } else if (expr is ConcreteSyntaxExpression) {
@@ -5893,13 +5947,18 @@ namespace Microsoft.Dafny {
     }
 
     public AST.Type TrType(Type t) {
+      if (t is InferredTypeProxy) {
+        t = ((InferredTypeProxy) t).T;
+      }
+      
+
       if (t is UserDefinedType) {
         UserDefinedType ut = (UserDefinedType) t;
 
         if (ut.IsArrayType) {
           Type tp = ut.TypeArgs.First();
           return new AST.ArrayType(TrType(tp), 1);
-        }
+        } 
       } else {
         return new AST.SimpleType("int");
       }
@@ -5910,17 +5969,29 @@ namespace Microsoft.Dafny {
     public AST.Expression TrAssignmentRhs(AssignmentRhs r) {
       if (r is ExprRhs) {
         ExprRhs erhs = (ExprRhs) r;
-        return TrExpr(erhs.Expr, null);
+        return TrExpr(erhs.Expr);
       } else if (r is TypeRhs) {
         TypeRhs tr = (TypeRhs)r;
         Expression f = tr.ArrayDimensions.First();
-        AST.Expression e = new AST.NewArray(TrType(tr.EType), TrExpr(f,null));
+        AST.Expression e = new AST.NewArray(TrType(tr.EType), TrExpr(f));
         return e;
       } else {
         AST.Expression e = new AST.CommentExpr("Not implemented kind of AssignmentRhs");
         return e;
       }
 
+    }
+
+    List<AST.Expression> TrArgs(List<Expression> args) {
+      List<AST.Expression> list = new List<AST.Expression>();
+      foreach (Expression ex in args) {
+        list.Add(TrExpr(ex));
+      }
+      return list;
+    }
+
+    List<AST.Expression> arglist(params AST.Expression[] e) {
+      return new List<AST.Expression>(e);
     }
 
   }

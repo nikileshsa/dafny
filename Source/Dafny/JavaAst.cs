@@ -21,7 +21,7 @@ namespace Microsoft.Dafny.Java {
     public static void Test1() {
       var id = new Identifier("id");
       var s = new AssignStatement(id, id);
-      MethodDeclaration md = new MethodDeclaration("mmm", new VarDeclaration[0], null,
+      MethodDeclaration md = new MethodDeclaration("mmm", new List<VarDeclaration>(), null,
         new BlockStatement(new Statement[] {s}));
       CompilationUnit cu = new CompilationUnit(null,null,null,new List<Declaration>());
       Console.Write(Printer.print(cu));
@@ -157,7 +157,8 @@ namespace Microsoft.Dafny.Java {
     }
     public class MethodDeclaration : Declaration {
       public string name;
-      public IEnumerable<VarDeclaration> formals;
+      public string modifiers;
+      public List<VarDeclaration> formals;
       public Type returnType;
       public BlockStatement body;
       public List<MethodSpecClause> clauses;
@@ -166,16 +167,18 @@ namespace Microsoft.Dafny.Java {
         this.clauses = new List<MethodSpecClause>();
       }
 
-      public MethodDeclaration(string name, IEnumerable<VarDeclaration> formals, Type returnType, BlockStatement body) {
+      public MethodDeclaration(string name, List<VarDeclaration> formals, Type returnType, BlockStatement body) {
         this.name = name;
         this.formals = formals;
         this.returnType = returnType;
         this.body = body;
         this.clauses = new List<MethodSpecClause>();
+        this.modifiers = "";
       }
 
       public MethodDeclaration(MethodDeclaration d) : this(d.name, d.formals, d.returnType, d.body) {
         this.clauses = new List<MethodSpecClause>(d.clauses);
+        this.modifiers = d.modifiers;
       }
 
       public override R accept<R, T>(IVisitor<R, T> v, T arg) {
@@ -649,8 +652,12 @@ namespace Microsoft.Dafny.Java {
         foreach (MethodSpecClause cl in ast.clauses) {
           ret += print(cl, indent);
         }
-        ret += indent + "public " + inline(ast.returnType) + " " + ast.name + "(";
-        foreach (Declaration d in ast.formals) ret += d.accept(this, indent) + ",";
+        ret += indent + ast.modifiers + " " + inline(ast.returnType) + " " + ast.name + "(";
+        bool first = true;
+        foreach (VarDeclaration d in ast.formals) {
+          if (first) first = false; else ret += ",";
+          ret += d.type.accept(this, indent) + " " + d.name;
+        }
         ret += ") ";
         ret += print(ast.body, indent) + eol;
         return ret;
