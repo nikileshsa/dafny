@@ -53,9 +53,13 @@ namespace Microsoft.Dafny.Java {
       public abstract R visit(Index ast, T arg);
       public abstract R visit(NewArray ast, T arg);
       public abstract R visit(NewObject ast, T arg);
+      public abstract R visit(Quantified ast, T arg);
+      public abstract R visit(Let ast, T arg);
       public abstract R visit(Apply ast, T arg);
       public abstract R visit(Binary ast, T arg);
       public abstract R visit(Unary ast, T arg);
+      public abstract R visit(Cast ast, T arg);
+      public abstract R visit(Ternary ast, T arg);
       public abstract R visit(Suffix ast, T arg);
       public abstract R visit(Paren ast, T arg);
       public abstract R visit(Literal ast, T arg);
@@ -172,6 +176,7 @@ namespace Microsoft.Dafny.Java {
       public Type returnType;
       public BlockStatement body;
       public List<MethodSpecClause> clauses;
+      public bool isModel;
 
       public MethodDeclaration() {
         this.clauses = new List<MethodSpecClause>();
@@ -184,11 +189,13 @@ namespace Microsoft.Dafny.Java {
         this.body = body;
         this.clauses = new List<MethodSpecClause>();
         this.modifiers = "";
+        this.isModel = false;
       }
 
       public MethodDeclaration(MethodDeclaration d) : this(d.name, d.formals, d.returnType, d.body) {
         this.clauses = new List<MethodSpecClause>(d.clauses);
         this.modifiers = d.modifiers;
+        this.isModel = d.isModel;
       }
 
       public override R accept<R, T>(IVisitor<R, T> v, T arg) {
@@ -508,6 +515,42 @@ namespace Microsoft.Dafny.Java {
       }
     }
 
+    public class Cast : Expression {
+      public Type newtype;
+      public Expression arg;
+
+      public Cast(Type newtype, Expression arg) {
+        this.newtype = newtype;
+        this.arg = arg;
+      }
+
+      public Cast(Cast e) : this(e.newtype, e.arg) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
+
+    public class Ternary : Expression {
+      public Expression conditional;
+      public Expression trueExpr;
+      public Expression falseExpr;
+      
+      public Ternary(Expression conditional, Expression trueExpr, Expression falseExpr) {
+        this.conditional = conditional;
+        this.trueExpr = trueExpr;
+        this.falseExpr = falseExpr;
+      }
+
+      public Ternary(Ternary e) : this(e.conditional, e.trueExpr, e.falseExpr) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
+
     public class Suffix : Expression {
       public string suffix;
       public Expression arg;
@@ -586,6 +629,45 @@ namespace Microsoft.Dafny.Java {
       }
 
       public Apply(Apply e) : this(e.method, e.args) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
+    public class Quantified : Expression {
+      public string kind;
+      public VarDeclaration declaration;
+      public Expression range;
+      public Expression value;
+
+      public Quantified(string kind, VarDeclaration declaration, Expression range, Expression value) {
+        this.kind = kind;
+        this.declaration = declaration;
+        this.range = range;
+        this.value = value;
+      }
+
+      public Quantified(Quantified e) : this(e.kind, e.declaration, e.range, e.value) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
+
+    public class Let : Expression {
+      public VarDeclaration declaration;
+      public Expression value;
+      public Expression term;
+
+      public Let(VarDeclaration declaration, Expression value, Expression term) {
+        this.declaration = declaration; 
+        this.value = value;
+        this.term = term;
+      }
+
+      public Let(Let e) : this(e.declaration, e.value, e.term) {
       }
 
       public override R accept<R, T>(IVisitor<R, T> v, T arg) {
@@ -696,6 +778,16 @@ namespace Microsoft.Dafny.Java {
         return "new " + inline(ast.type) + "()"; // TODO - needs arguments
       }
 
+      public override string visit(Quantified ast, string indent) {
+        return ast.kind + " " + inline(ast.declaration.type) + " " + ast.declaration.name
+               + "; " + inline(ast.range) + "; " + inline(ast.value);
+      }
+
+      public override string visit(Let ast, string indent) {
+        return "(\\let " + inline(ast.declaration.type) + " " + ast.declaration.name
+               + " = " + inline(ast.value) + " in " + inline(ast.term) + ")";
+      }
+
       public override string visit(NewArray ast, string indent) {
         return "new " + inline(ast.type) + "[" + inline(ast.dim) + "]";
       }
@@ -722,6 +814,14 @@ namespace Microsoft.Dafny.Java {
 
       public override string visit(Unary ast, string indent) {
         return ast.op + inline(ast.arg);
+      }
+
+      public override string visit(Cast ast, string indent) {
+        return "(" + inline(ast.arg) + " as " + inline(ast.newtype) + ")";
+      }
+
+      public override string visit(Ternary ast, string indent) {
+        return "(" + inline(ast.conditional) + " ? " + inline(ast.trueExpr) + " : " + inline(ast.falseExpr) + ")";
       }
 
       public override string visit(Suffix ast, string indent) {
@@ -789,7 +889,7 @@ namespace Microsoft.Dafny.Java {
       }
 
       public override string visit(ClassDeclaration ast, string indent) {
-        string ret = indent + "public class " + ast.name + "{" + eol;
+        string ret = indent + "public class " + ast.name + " {" + eol;
         foreach (Declaration d in ast.members) {
           ret += d.accept(this, indent + indentamt);
         }
@@ -802,6 +902,8 @@ namespace Microsoft.Dafny.Java {
         foreach (MethodSpecClause cl in ast.clauses) {
           ret += print(cl, indent);
         }
+
+        if (ast.isModel) ret += indent + "/*@" + eol;
         ret += indent + ast.modifiers + " " + inline(ast.returnType) + " " + ast.name + "(";
         bool first = true;
         foreach (VarDeclaration d in ast.formals) {
@@ -809,7 +911,8 @@ namespace Microsoft.Dafny.Java {
           ret += d.type.accept(this, indent) + " " + d.name;
         }
         ret += ") ";
-        ret += print(ast.body, indent) + eol;
+        ret += print(ast.body, indent);
+        if (ast.isModel) ret += indent + "@*/" + eol;
         return ret;
       }
 

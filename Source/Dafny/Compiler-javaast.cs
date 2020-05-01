@@ -601,12 +601,12 @@ namespace Microsoft.Dafny {
       // TODO: type parameters?
       // TODO: superclass, interfaces?
 
-      CompileClassMembers(cd, cl, errorWr);
+      TrClassMembers(cd, cl, errorWr);
       return cd;
 
     }
 
-    void CompileClassMembers(AST.ClassDeclaration cd, TopLevelDeclWithMembers c, TextWriter errorWr) {
+    void TrClassMembers(AST.ClassDeclaration cd, TopLevelDeclWithMembers c, TextWriter errorWr) {
       Contract.Requires(cd != null);
       Contract.Requires(c != null);
       Contract.Requires(errorWr != null);
@@ -671,8 +671,7 @@ namespace Microsoft.Dafny {
 //              var sw = EmitAssignmentRhs(wSet);
 //              EmitSetterParameter(sw);
             }
-          }
-          else {
+          } else {
             var f = (Field) member;
             AST.Expression rhs = null;
             if (!FieldsInTraits && f is ConstantField cf && cf.Rhs != null) {
@@ -817,6 +816,7 @@ namespace Microsoft.Dafny {
             // }
           }
           else if (f.IsGhost) {
+            cd.members.Add(TrFunction(f));
             // TODO
             // nothing to compile, but we do check for assumes
             // if (f.Body == null) {
@@ -904,6 +904,10 @@ namespace Microsoft.Dafny {
         md.clauses.Add(new AST.RequiresClause(TrExpr(e.E)));
       }
 
+      foreach (Formal f in m.Ins) {
+        md.formals.Add(new AST.VarDeclaration(f.Name, TrType(f.Type), null));
+      }
+
       Contract.Assert(results == null);
       results = new Dictionary<string,string>();
       if (m.Outs.Count == 1) {
@@ -983,6 +987,39 @@ namespace Microsoft.Dafny {
         md.formals.Add(v);
       }
 
+      return md;
+    }
+
+    public AST.MethodDeclaration TrFunction(Function f) {
+      AST.MethodDeclaration md = new AST.MethodDeclaration();
+      md.name = f.Name;
+      md.isModel = true;
+      md.formals = new List<AST.VarDeclaration>();
+      foreach (Formal fm in f.Formals) {
+        md.formals.Add(new AST.VarDeclaration(fm.Name, TrType(fm.Type), null));
+      }
+
+      foreach (MaybeFreeExpression e in f.Req) {
+        md.clauses.Add(new AST.RequiresClause(TrExpr(e.E)));
+      }
+      
+      Contract.Assert(results == null);
+      results = new Dictionary<string,string>(); 
+      if (f.Result != null) results.Add(f.Result.Name, "\\result");
+
+      foreach (MaybeFreeExpression e in f.Ens) {
+        md.clauses.Add(new AST.EnsuresClause(TrExpr(e.E)));
+      }
+
+      results.Clear();
+      results = null;
+
+      md.returnType = TrType(f.ResultType);
+      md.modifiers = "model pure function public final";
+      if (f.IsStatic) md.modifiers += " static";
+      AST.Expression result = TrExpr(f.Body);
+      AST.Statement ret = new AST.ReturnStatement(result);
+      md.body = new AST.BlockStatement(ret);
       return md;
     }
 
@@ -5352,8 +5389,6 @@ namespace Microsoft.Dafny {
           init= TrAssignmentRhs(exprs.First());
         }
         ast = new AST.VarDeclaration(v.Name, t, init);
-        Console.WriteLine("Not implemented: var decl statement");
-        return null;  // TODO
         // var i = 0;
         // foreach (var local in s.Locals) {
         //   bool hasRhs = s.Update is AssignSuchThatStmt;
@@ -5602,9 +5637,9 @@ namespace Microsoft.Dafny {
 
       } else if (expr is ConversionExpr) {
         var e = (ConversionExpr)expr;
-        return new AST.CommentExpr("ConversionExpr is not implemented"); // TODO
-        //EmitConversionExpr(e, inLetExprBody, wr);
-
+        // TODO - cf EmitConversion for more detail
+        return new AST.Cast(TrType(e.ToType), TrExpr(e.E));
+ 
       } else if (expr is BinaryExpr) {
         var e = (BinaryExpr)expr;
         AST.Expression lhs = TrExpr(e.E0);
@@ -5712,8 +5747,11 @@ namespace Microsoft.Dafny {
 
       } else if (expr is LetExpr) {
         var e = (LetExpr)expr;
-        return new AST.CommentExpr("LetExpr is not implemented"); // TODO
-
+        BoundVar bv = e.BoundVars.First();
+        Expression value = e.RHSs.First();
+        AST.VarDeclaration vd = new AST.VarDeclaration(bv.Name, TrType(bv.Type), null);
+        return new AST.Let(vd, TrExpr(value), TrExpr(e.Body));
+     
         // if (e.Exact) {
         //   // The Dafny "let" expression
         //   //    var Pattern(x,y) := G; E
@@ -5801,8 +5839,14 @@ namespace Microsoft.Dafny {
 
       } else if (expr is QuantifierExpr) {
         var e = (QuantifierExpr)expr;
-        return new AST.CommentExpr("QuantifierExpr is not implemented"); // TODO
-
+        if (e.BoundVars.Count != 1) return notImplemented("QuantifiedExpr with multiple bound vars");
+        BoundVar v = e.BoundVars.First();
+        string kind = (expr is ForallExpr) ? "\\forall" : (expr is ExistsExpr) ? "\\exists" : "**Unknown**";
+        AST.VarDeclaration vd = new AST.VarDeclaration(v.DisplayName, TrType(v.Type), null);
+        AST.Expression range = TrExpr(e.Range);
+        AST.Expression value = TrExpr(e.Term);
+        return new AST.Quantified(kind, vd, range, value);
+     
         // Compilation does not check whether a quantifier was split.
 
         // Contract.Assert(e.Bounds != null);  // for non-ghost quantifiers, the resolver would have insisted on finding bounds
@@ -5939,11 +5983,10 @@ namespace Microsoft.Dafny {
         //TrExpr(e.E, wr, inLetExprBody);
 
       } else if (expr is ITEExpr) {
-        return new AST.CommentExpr("ITEExpr is not implemented"); // TODO
-        // var e = (ITEExpr)expr;
-        // EmitITE(e.Test, e.Thn, e.Els, inLetExprBody, wr);
+        var e = (ITEExpr)expr;
+        return new AST.Ternary(TrExpr(e.Test), TrExpr(e.Thn), TrExpr(e.Els));
 
-    } else if (expr is NameSegment) {
+      } else if (expr is NameSegment) {
         var e = (NameSegment) expr;
         string n = e.Name;
         if (results != null) { // TODO: Should only do lookup on simple variables
@@ -5990,7 +6033,10 @@ namespace Microsoft.Dafny {
           return new AST.ArrayType(TrType(tp), 1);
         } 
       } else {
-        return new AST.SimpleType("int");
+        if (t.IsIntegerType) return new AST.SimpleType("int");
+        if (t.IsBoolType) return new AST.SimpleType("boolean");
+        if (t.IsRealType) return new AST.SimpleType("\\real");
+        return new AST.SimpleType("/*???*/");
       }
 
       return new AST.SimpleType("**UnknownType**");
@@ -6031,6 +6077,11 @@ namespace Microsoft.Dafny {
         s = new AST.LabelledStatement(labels.Data.Name, s);
       }
       return s;
+    }
+
+    AST.Expression notImplemented(string text) {
+      throw new NotImplementedException(text);
+      return new AST.CommentExpr(text);
     }
 
   }
