@@ -6011,11 +6011,34 @@ namespace Microsoft.Dafny {
         return new AST.Apply(TrExpr(e.Lhs), TrArgs(e.Args));
 
       } else if (expr is ExprDotName) {
-        var e = (ExprDotName)expr;
+        var e = (ExprDotName) expr;
         String suffix = e.SuffixName;
         if (suffix == "Length") suffix = "length";
         AST.Expression arg = TrExpr(e.Lhs);
         return new AST.Suffix(arg, suffix);
+
+      } else if (expr is ChainingExpression) {
+        // TODO _ check for chaining ops in Dafny that are not chainable in Java (eg ==)
+        var e = (ChainingExpression)expr;
+        List<AST.Expression> list = new List<AST.Expression>();
+        foreach (Expression ee in e.Operands) {
+          list.Add(TrExpr(ee));
+        }
+        List<string> ops = new List<string>();
+        foreach (BinaryExpr.Opcode ee in e.Operators) {
+          string op = "???";
+          switch (ee) {
+            case BinaryExpr.Opcode.Eq : op = "=="; break;
+            case BinaryExpr.Opcode.Neq : op = "!="; break;
+            case BinaryExpr.Opcode.Gt : op = ">"; break;
+            case BinaryExpr.Opcode.Ge : op = ">="; break;
+            case BinaryExpr.Opcode.Lt : op = "<"; break;
+            case BinaryExpr.Opcode.Le : op = "<="; break;
+            default: break; // TODO - not implemented chaining operator
+          }
+          ops.Add(op);
+        }
+        return new AST.Chained(list, ops);
         
       } else if (expr is ConcreteSyntaxExpression) {
         var e = (ConcreteSyntaxExpression)expr;

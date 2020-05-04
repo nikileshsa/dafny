@@ -57,6 +57,7 @@ namespace Microsoft.Dafny.Java {
       public abstract R visit(Let ast, T arg);
       public abstract R visit(Apply ast, T arg);
       public abstract R visit(Binary ast, T arg);
+      public abstract R visit(Chained ast, T arg);
       public abstract R visit(Unary ast, T arg);
       public abstract R visit(Cast ast, T arg);
       public abstract R visit(Ternary ast, T arg);
@@ -500,6 +501,23 @@ namespace Microsoft.Dafny.Java {
         return v.visit(this, arg);
       }
     }
+    public class Chained : Expression {
+      public List<Expression> expressions;
+      public List<string> ops;
+ 
+      public Chained(List<Expression> expressions, List<string> ops) {
+        this.expressions = expressions;
+        this.ops = ops;
+        this.type = null;
+      }
+
+      public Chained(Chained e) : this(e.expressions, e.ops) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
 
     public class Unary : Expression {
       public string op;
@@ -844,6 +862,18 @@ namespace Microsoft.Dafny.Java {
 
       public override string visit(Binary ast, string indent) {
         return inline(ast.lhs) + " " + ast.op + " " + inline(ast.rhs);
+      }
+
+      public override string visit(Chained ast, string indent) {
+        string ret = "";
+        IEnumerator<Expression> iter = ast.expressions.GetEnumerator();
+        iter.MoveNext();
+        foreach (string op in ast.ops) {
+          ret += inline(iter.Current) + " " + op + " ";
+          iter.MoveNext();
+        }
+        ret += inline(iter.Current);
+        return ret;
       }
 
       public override string visit(Unary ast, string indent) {
