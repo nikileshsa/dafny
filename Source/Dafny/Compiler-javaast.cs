@@ -5167,7 +5167,18 @@ namespace Microsoft.Dafny {
         }
 
         // TODO - needs specs, * version of condition, case statement alternatives
-        ast = new AST.WhileStatement(TrExpr(s.Guard), TrStmt(s.Body).noindent());  // TODO
+        AST.WhileStatement wast = new AST.WhileStatement(TrExpr(s.Guard), TrStmt(s.Body).noindent());  // TODO
+        if (s.Invariants != null) foreach (MaybeFreeExpression cl in s.Invariants) {
+          wast.invariants.Add(new AST.InvariantClause(TrExpr(cl.E)));
+        }
+
+        if (s.Decreases != null && s.Decreases.Expressions.Count > 0) {
+          // TODO: implement multiple decreases expressions
+          // TODO: implement non-integer decreases expressions
+          wast.decreases = new AST.DecreasesClause(TrExpr(s.Decreases.Expressions.First()));
+        }
+        ast = wast;
+
         // if (s.Guard == null) {
         //   if (DafnyOptions.O.ForbidNondeterminism) {
         //     Error(s.Tok, "nondeterministic loop forbidden by /definiteAssignment:3 option", wr);

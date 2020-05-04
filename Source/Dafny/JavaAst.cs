@@ -66,6 +66,8 @@ namespace Microsoft.Dafny.Java {
       public abstract R visit(VarDeclaration ast, T arg);
       public abstract R visit(RequiresClause ast, T arg);
       public abstract R visit(EnsuresClause ast, T arg);
+      public abstract R visit(InvariantClause ast, T arg);
+      public abstract R visit(DecreasesClause ast, T arg);
     }
 
     public class Program : AST {
@@ -359,10 +361,14 @@ namespace Microsoft.Dafny.Java {
     public class WhileStatement : Statement {
       public Expression condition;
       public Statement body;
+      public List<InvariantClause> invariants;
+      public DecreasesClause decreases;
 
       public WhileStatement(Expression condition, Statement body) {
         this.condition = condition;
         this.body = body;
+        this.invariants = new List<InvariantClause>();
+        this.decreases = null;
       }
 
       public WhileStatement(WhileStatement ast) : this(ast.condition, ast.body) {
@@ -705,6 +711,34 @@ namespace Microsoft.Dafny.Java {
         return v.visit(this, arg);
       }
     }
+    public class InvariantClause : MethodSpecClause {
+      public Expression expr;
+   
+      public InvariantClause(Expression expr) {
+        this.expr = expr;
+      }
+
+      public InvariantClause(InvariantClause e) : this(e.expr) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
+    public class DecreasesClause : AST {
+      public Expression expr;
+   
+      public DecreasesClause(Expression expr) {
+        this.expr = expr;
+      }
+
+      public DecreasesClause(DecreasesClause e) : this(e.expr) {
+      }
+
+      public override R accept<R, T>(IVisitor<R, T> v, T arg) {
+        return v.visit(this, arg);
+      }
+    }
     public class Printer : IVisitor<string, string> {
 
       static public string eol = "\n";
@@ -875,7 +909,13 @@ namespace Microsoft.Dafny.Java {
       }
 
       public override string visit(WhileStatement ast, string indent) {
-        return indent + "while (" + inline(ast.condition) + ") " + print(ast.body, indent) + eol;
+        string ret = "";
+        if (ast.invariants != null) foreach (InvariantClause cl in ast.invariants) {
+          ret += print(cl, indent);
+        }
+        if (ast.decreases != null) ret += print(ast.decreases, indent);
+        ret += indent + "while (" + inline(ast.condition) + ") " + print(ast.body, indent) + eol;
+        return ret;
       }
 
       public override string visit(IfStatement ast, string indent) {
@@ -928,6 +968,14 @@ namespace Microsoft.Dafny.Java {
 
       public override string visit(EnsuresClause ast, string ident) {
         return ident + "//@ " + "ensures " + inline(ast.expr) + ";" + eol;
+      }
+
+      public override string visit(InvariantClause ast, string ident) {
+        return ident + "//@ " + "invariant " + inline(ast.expr) + ";" + eol;
+      }
+
+      public override string visit(DecreasesClause ast, string ident) {
+        return ident + "//@ " + "decreases " + inline(ast.expr) + ";" + eol;
       }
 
     }
