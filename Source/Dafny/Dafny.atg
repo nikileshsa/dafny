@@ -756,6 +756,7 @@ TOKENS
   then = "then".
   else = "else".
   as = "as".
+  is = "is".
   by = "by".
   in = "in".
   decreases = "decreases".
@@ -3318,8 +3319,12 @@ AsExpression<out Expression e, bool allowSemi, bool allowLambda, bool allowBitwi
 = (. IToken tok; IToken x; Type toType; .)
   UnaryExpression<out e, allowSemi, allowLambda, allowBitwiseOps>
   { IF(IsAs())
-    "as"                                     (. tok = t; .)
+    [ "as"                                   (. tok = t; .)
      TypeAndToken<out x, out toType, true>   (. e = new ConversionExpr(tok, e, toType); .)
+    |
+      "is"                                   (. tok = t;
+                                                SemErr("'is' expressions are not yet implemented"; .)
+      TypeAndToken<out x, out toType, true>
   }
   .
 UnaryExpression<out Expression e, bool allowSemi, bool allowLambda, bool allowBitwiseOps>
